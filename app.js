@@ -31,9 +31,14 @@ L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
 
 const PROJECT_KEY = "qgis2web_sync_project";
 
+const STANDARD_OBS_LAG = "Observationer";
+
 let harZoometTilData = false;
 let aktiveLag = [];
 let aktueltProjekt = localStorage.getItem(PROJECT_KEY) || "";
+let projektListe = [];
+let obsLagPrNavn = {};
+let aktivtObsLag = STANDARD_OBS_LAG;
 
 const layerControl = L.control.layers(null, null, { collapsed: false }).addTo(map);
 const liveLayerGroup = L.layerGroup().addTo(map);
@@ -56,13 +61,73 @@ function rydLag() {
   aktiveLag = [];
 }
 
+function escapeHtml(tekst) {
+  return String(tekst).replace(
+    /[&<>"']/g,
+    (tegn) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[tegn])
+  );
+}
+
+function obsLagFor(navn) {
+  if (!obsLagPrNavn[navn]) {
+    const laget = L.geoJSON(null, {
+      pointToLayer: (feature, latlng) =>
+        L.circleMarker(latlng, {
+          radius: 7,
+          color: "#a34700",
+          fillColor: "#ff9800",
+          fillOpacity: 0.9,
+          weight: 2,
+        }),
+      onEachFeature: (feature, featureLag) => {
+        const props = feature.properties || {};
+        featureLag.bindPopup(
+          `<strong>${escapeHtml(props._obs_layer || STANDARD_OBS_LAG)}</strong><br>` +
+            `${escapeHtml(props.note || "")}<br>` +
+            `<small>${escapeHtml(props.timestamp || "")}</small>`
+        );
+      },
+    }).addTo(map);
+    obsLagPrNavn[navn] = laget;
+    layerControl.addOverlay(laget, `${navn} (observationer)`);
+  }
+  return obsLagPrNavn[navn];
+}
+
+function rydObservationer() {
+  Object.keys(obsLagPrNavn).forEach((navn) => {
+    layerControl.removeLayer(obsLagPrNavn[navn]);
+    map.removeLayer(obsLagPrNavn[navn]);
+  });
+  obsLagPrNavn = {};
+}
+
+function visObservationer(projektId) {
+  return hentJson(`data/projects/${projektId}/pending.geojson`)
+    .then((geojson) => {
+      ((geojson && geojson.features) || []).forEach((feature) => {
+        const navn = (feature.properties && feature.properties._obs_layer) || STANDARD_OBS_LAG;
+        obsLagFor(navn).addData(feature);
+      });
+    })
+    .catch((err) => console.warn("Kunne ikke hente observationer:", err));
+}
+
 function visProjekt(projektId) {
   rydLag();
+  rydObservationer();
   harZoometTilData = false;
   if (!projektId) return Promise.resolve();
 
   aktueltProjekt = projektId;
   localStorage.setItem(PROJECT_KEY, projektId);
+
+  const projekt = projektListe.find((post) => post.id === projektId);
+  aktivtObsLag = (projekt && projekt.obsLayer) || STANDARD_OBS_LAG;
+  opdaterObsLagFelt();
+
+  visObservationer(projektId);
 
   return hentJson(`data/projects/${projektId}/layers.geojson`)
     .then((geojson) => {
@@ -80,7 +145,15 @@ function visProjekt(projektId) {
         .forEach((navn) => {
           const laget = L.geoJSON(
             { type: "FeatureCollection", features: grupper[navn] },
-            { pointToLayer: (feature, latlng) => L.circleMarker(latlng, { radius: 6 }) }
+            {
+              // _qgis_style er allerede Leaflet Path-options, sat af eksportøren.
+              style: (feature) => (feature.properties && feature.properties._qgis_style) || {},
+              pointToLayer: (feature, latlng) =>
+                L.circleMarker(
+                  latlng,
+                  (feature.properties && feature.properties._qgis_style) || { radius: 6 }
+                ),
+            }
           ).addTo(map);
           layerControl.addOverlay(laget, `${navn} (${grupper[navn].length})`);
           aktiveLag.push(laget);
@@ -99,6 +172,7 @@ function indlæsProjekter() {
   return hentJson("data/projects.json")
     .then((index) => {
       const projekter = (index && index.projects) || [];
+      projektListe = projekter;
       projectSelect.innerHTML = "";
 
       if (!projekter.length) {
@@ -260,11 +334,12 @@ async function addObservation(latlng, note) {
     throw new Error(`Kunne ikke hente ventende observationer (${getResponse.status})`);
   }
 
-  existing.features.push({
+  const nyFeature = {
     type: "Feature",
     geometry: { type: "Point", coordinates: [latlng.lng, latlng.lat] },
-    properties: { note, timestamp: new Date().toISOString() },
-  });
+    properties: { note, timestamp: new Date().toISOString(), _obs_layer: aktivtObsLag },
+  };
+  existing.features.push(nyFeature);
 
   const body = {
     message: "Ny observation fra webkort",
@@ -282,6 +357,41 @@ async function addObservation(latlng, note) {
     const text = await putResponse.text();
     throw new Error(`GitHub svarede ${putResponse.status}: ${text}`);
   }
+
+  // Vises med det samme: GitHub Pages er først opdateret efter næste build,
+  // så en genindlæsning af pending.geojson ville ikke have den med endnu.
+  obsLagFor(aktivtObsLag).addData(nyFeature);
+}
+
+async function sætObsLagForProjekt(projektId, navn) {
+  const path = "data/projects.json";
+  const branch = config.branch || "main";
+
+  const getResponse = await githubApi(`${path}?ref=${branch}`);
+  if (getResponse.status !== 200) {
+    throw new Error(`Kunne ikke hente projektlisten (${getResponse.status})`);
+  }
+  const payload = await getResponse.json();
+  const index = JSON.parse(decodeBase64(payload.content));
+
+  const projekt = (index.projects || []).find((post) => post.id === projektId);
+  if (!projekt) throw new Error("Projektet findes ikke i indekset.");
+  projekt.obsLayer = navn;
+
+  const putResponse = await githubApi(path, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: `Nyt observationslag '${navn}' i ${projekt.name || projektId}`,
+      content: encodeBase64(JSON.stringify(index, null, 2)),
+      branch,
+      sha: payload.sha,
+    }),
+  });
+  if (!putResponse.ok) {
+    throw new Error(`GitHub svarede ${putResponse.status}`);
+  }
+  projektListe = index.projects || [];
 }
 
 // --- Indstillinger ---
@@ -295,6 +405,30 @@ document.getElementById("cfg-repo").value = config.repo || "";
 document.getElementById("cfg-branch").value = config.branch || "main";
 document.getElementById("cfg-token").value = config.token || "";
 document.getElementById("cfg-firebase").value = config.firebaseUrl || "";
+
+function opdaterObsLagFelt() {
+  const felt = document.getElementById("cfg-obslayer");
+  if (felt) felt.value = aktivtObsLag;
+}
+
+document.getElementById("obslayer-new").addEventListener("click", async () => {
+  if (!aktueltProjekt) {
+    alert("Vælg et projekt først.");
+    return;
+  }
+  const navn = prompt("Navn på nyt observationslag:", "");
+  if (!navn || !navn.trim()) return;
+
+  try {
+    await sætObsLagForProjekt(aktueltProjekt, navn.trim());
+    aktivtObsLag = navn.trim();
+    opdaterObsLagFelt();
+    obsLagFor(aktivtObsLag);
+    alert(`Nye observationer registreres nu i '${aktivtObsLag}'.`);
+  } catch (err) {
+    alert(`Kunne ikke oprette observationslag: ${err.message}`);
+  }
+});
 
 document.getElementById("cfg-save").addEventListener("click", () => {
   config = {
