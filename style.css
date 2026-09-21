@@ -110,6 +110,21 @@ html, body {
   color: #b00020;
 }
 
+.slet-knap {
+  margin-top: 8px;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 6px;
+  background: #b00020;
+  color: white;
+  cursor: pointer;
+}
+
+.slet-knap:disabled {
+  background: #999;
+  cursor: default;
+}
+
 #settings-toggle {
   position: absolute;
   bottom: 12px;

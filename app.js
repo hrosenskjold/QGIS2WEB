@@ -82,11 +82,29 @@ function obsLagFor(navn) {
         }),
       onEachFeature: (feature, featureLag) => {
         const props = feature.properties || {};
-        featureLag.bindPopup(
+        const indhold = document.createElement("div");
+        indhold.innerHTML =
           `<strong>${escapeHtml(props._obs_layer || STANDARD_OBS_LAG)}</strong><br>` +
-            `${escapeHtml(props.note || "")}<br>` +
-            `<small>${escapeHtml(props.timestamp || "")}</small>`
-        );
+          `${escapeHtml(props.note || "")}<br>` +
+          `<small>${escapeHtml(props.timestamp || "")}</small><br>`;
+
+        const sletKnap = document.createElement("button");
+        sletKnap.textContent = "Slet observation";
+        sletKnap.className = "slet-knap";
+        sletKnap.addEventListener("click", async () => {
+          if (!confirm("Slet denne observation?")) return;
+          sletKnap.disabled = true;
+          try {
+            await sletObservation(feature);
+            laget.removeLayer(featureLag);
+            map.closePopup();
+          } catch (err) {
+            sletKnap.disabled = false;
+            alert(`Kunne ikke slette: ${err.message}`);
+          }
+        });
+        indhold.appendChild(sletKnap);
+        featureLag.bindPopup(indhold);
       },
     }).addTo(map);
     obsLagPrNavn[navn] = laget;
@@ -337,7 +355,12 @@ async function addObservation(latlng, note) {
   const nyFeature = {
     type: "Feature",
     geometry: { type: "Point", coordinates: [latlng.lng, latlng.lat] },
-    properties: { note, timestamp: new Date().toISOString(), _obs_layer: aktivtObsLag },
+    properties: {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      note,
+      timestamp: new Date().toISOString(),
+      _obs_layer: aktivtObsLag,
+    },
   };
   existing.features.push(nyFeature);
 
@@ -361,6 +384,43 @@ async function addObservation(latlng, note) {
   // Vises med det samme: GitHub Pages er først opdateret efter næste build,
   // så en genindlæsning af pending.geojson ville ikke have den med endnu.
   obsLagFor(aktivtObsLag).addData(nyFeature);
+}
+
+function sammeObservation(kandidat, props) {
+  const andre = kandidat.properties || {};
+  if (props.id || andre.id) return andre.id === props.id;
+  // Observationer fra før id'er blev indført matches på tidsstempel og note.
+  return andre.timestamp === props.timestamp && andre.note === props.note;
+}
+
+async function sletObservation(feature) {
+  if (!aktueltProjekt) throw new Error("Intet projekt valgt.");
+  const path = `data/projects/${aktueltProjekt}/pending.geojson`;
+  const branch = config.branch || "main";
+
+  const getResponse = await githubApi(`${path}?ref=${branch}`);
+  if (getResponse.status !== 200) {
+    throw new Error(`Kunne ikke hente ventelisten (${getResponse.status})`);
+  }
+  const payload = await getResponse.json();
+  const data = JSON.parse(decodeBase64(payload.content));
+
+  const props = feature.properties || {};
+  data.features = (data.features || []).filter((post) => !sammeObservation(post, props));
+
+  const putResponse = await githubApi(path, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: "Slet observation fra webkort",
+      content: encodeBase64(JSON.stringify(data, null, 2)),
+      branch,
+      sha: payload.sha,
+    }),
+  });
+  if (!putResponse.ok) {
+    throw new Error(`GitHub svarede ${putResponse.status}`);
+  }
 }
 
 async function sætObsLagForProjekt(projektId, navn) {
