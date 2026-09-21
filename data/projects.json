@@ -1,6 +1,11 @@
 {
   "projects": [
     {
+      "id": "binderup",
+      "name": "Binderup",
+      "updated": "2026-09-21T18:50:35Z"
+    },
+    {
       "id": "testpublicering",
       "name": "Testpublicering",
       "updated": "2026-09-21T18:49:39Z"
