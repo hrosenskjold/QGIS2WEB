@@ -1,0 +1,121 @@
+html, body {
+  margin: 0;
+  height: 100%;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+#map {
+  position: absolute;
+  inset: 0;
+}
+
+#toolbar {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 1000;
+  background: white;
+  padding: 8px 12px;
+  border-radius: 8px;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100vw - 24px);
+}
+
+#toolbar button {
+  font-size: 1rem;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 6px;
+  background: #1a73e8;
+  color: white;
+  cursor: pointer;
+}
+
+#gps-status {
+  font-size: 0.8rem;
+  color: #333;
+  white-space: nowrap;
+}
+
+.panel {
+  position: absolute;
+  top: 70px;
+  left: 12px;
+  z-index: 1000;
+  background: white;
+  padding: 12px;
+  border-radius: 8px;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.3);
+  width: 260px;
+  max-width: calc(100vw - 24px);
+}
+
+.panel h3 {
+  margin-top: 0;
+}
+
+.panel label {
+  display: block;
+  font-size: 0.85rem;
+  margin-top: 8px;
+}
+
+.panel input,
+#observation-form textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px;
+  margin-top: 2px;
+}
+
+#observation-form textarea {
+  min-height: 70px;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.form-actions button,
+#cfg-save {
+  padding: 8px 14px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+#cfg-save,
+#observation-save {
+  background: #1a73e8;
+  color: white;
+}
+
+.warning {
+  font-size: 0.75rem;
+  color: #b00020;
+}
+
+#settings-toggle {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  z-index: 1000;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: none;
+  background: white;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.3);
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+
+.hidden {
+  display: none !important;
+}

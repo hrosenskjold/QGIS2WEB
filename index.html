@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>QGIS2Web Sync – Feltkort</title>
+<link rel="manifest" href="manifest.json" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div id="map"></div>
+
+<div id="toolbar">
+  <button id="add-observation-btn">Tilføj observation her</button>
+  <span id="gps-status">GPS: venter…</span>
+</div>
+
+<div id="observation-form" class="panel hidden">
+  <label>Note</label>
+  <textarea id="observation-note" placeholder="Skriv en kort note…"></textarea>
+  <div class="form-actions">
+    <button id="observation-cancel">Annullér</button>
+    <button id="observation-save">Gem observation</button>
+  </div>
+</div>
+
+<div id="settings-panel" class="panel hidden">
+  <h3>Indstillinger</h3>
+  <label>GitHub-bruger/organisation
+    <input id="cfg-owner" />
+  </label>
+  <label>GitHub-repo
+    <input id="cfg-repo" />
+  </label>
+  <label>Branch
+    <input id="cfg-branch" value="main" />
+  </label>
+  <label>Personal Access Token
+    <input id="cfg-token" type="password" />
+  </label>
+  <label>Firebase database-URL
+    <input id="cfg-firebase" placeholder="https://dit-projekt.firebasedatabase.app" />
+  </label>
+  <button id="cfg-save">Gem indstillinger</button>
+  <p class="warning">
+    Token gemmes kun lokalt i denne browser (localStorage). Brug en
+    fine-grained token med kun "Contents: read/write" på ét repo.
+  </p>
+</div>
+<button id="settings-toggle" title="Indstillinger">⚙</button>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
