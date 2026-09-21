@@ -29,15 +29,40 @@ L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
   attribution: "&copy; OpenStreetMap-bidragydere",
 }).addTo(map);
 
-const dataLayerGroup = L.layerGroup().addTo(map);
+let harZoometTilData = false;
 
-fetch("data/layers.geojson")
+const layerControl = L.control.layers(null, null, { collapsed: false }).addTo(map);
+const liveLayerGroup = L.layerGroup().addTo(map);
+layerControl.addOverlay(liveLayerGroup, "Min position");
+
+// Cache-bustes, så et nyt "Publicér til web" fra QGIS slår igennem ved refresh.
+fetch(`data/layers.geojson?t=${Date.now()}`, { cache: "no-store" })
   .then((response) => (response.ok ? response.json() : null))
   .then((geojson) => {
-    if (!geojson) return;
-    L.geoJSON(geojson, {
-      pointToLayer: (feature, latlng) => L.circleMarker(latlng, { radius: 6 }),
-    }).addTo(dataLayerGroup);
+    const features = (geojson && geojson.features) || [];
+    if (!features.length) return;
+
+    const grupper = {};
+    features.forEach((feature) => {
+      const navn = (feature.properties && feature.properties._qgis_layer) || "Publicerede lag";
+      (grupper[navn] = grupper[navn] || []).push(feature);
+    });
+
+    const tilføjede = [];
+    Object.keys(grupper).sort().forEach((navn) => {
+      const laget = L.geoJSON(
+        { type: "FeatureCollection", features: grupper[navn] },
+        { pointToLayer: (feature, latlng) => L.circleMarker(latlng, { radius: 6 }) }
+      ).addTo(map);
+      layerControl.addOverlay(laget, `${navn} (${grupper[navn].length})`);
+      tilføjede.push(laget);
+    });
+
+    const bounds = L.featureGroup(tilføjede).getBounds();
+    if (bounds.isValid()) {
+      map.fitBounds(bounds, { padding: [30, 30] });
+      harZoometTilData = true;
+    }
   })
   .catch((err) => console.warn("Kunne ikke hente publicerede lag:", err));
 
@@ -65,8 +90,10 @@ function onPosition(position) {
       color: "#1a73e8",
       fillColor: "#1a73e8",
       fillOpacity: 0.9,
-    }).addTo(map);
-    map.setView([latitude, longitude], 15);
+    }).addTo(liveLayerGroup);
+    // Første GPS-fix centrerer kun kortet hvis der ikke allerede er zoomet til
+    // publicerede lag – ellers hopper visningen væk fra dine data.
+    if (!harZoometTilData) map.setView([latitude, longitude], 15);
   } else {
     liveMarker.setLatLng([latitude, longitude]);
   }
