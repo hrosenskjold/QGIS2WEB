@@ -14,6 +14,20 @@
         "note": "bro",
         "timestamp": "2026-09-21T18:53:57.672Z"
       }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          9.90945339202881,
+          57.05725315789359
+        ]
+      },
+      "properties": {
+        "note": "test",
+        "timestamp": "2026-09-21T18:54:16.199Z"
+      }
     }
   ]
 }
