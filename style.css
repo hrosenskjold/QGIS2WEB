@@ -40,6 +40,15 @@ html, body {
   white-space: nowrap;
 }
 
+#project-select {
+  font-size: 1rem;
+  padding: 9px 8px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  background: white;
+  max-width: 45vw;
+}
+
 .panel {
   position: absolute;
   top: 70px;

@@ -29,42 +29,101 @@ L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
   attribution: "&copy; OpenStreetMap-bidragydere",
 }).addTo(map);
 
+const PROJECT_KEY = "qgis2web_sync_project";
+
 let harZoometTilData = false;
+let aktiveLag = [];
+let aktueltProjekt = localStorage.getItem(PROJECT_KEY) || "";
 
 const layerControl = L.control.layers(null, null, { collapsed: false }).addTo(map);
 const liveLayerGroup = L.layerGroup().addTo(map);
 layerControl.addOverlay(liveLayerGroup, "Min position");
 
+const projectSelect = document.getElementById("project-select");
+
 // Cache-bustes, så et nyt "Publicér til web" fra QGIS slår igennem ved refresh.
-fetch(`data/layers.geojson?t=${Date.now()}`, { cache: "no-store" })
-  .then((response) => (response.ok ? response.json() : null))
-  .then((geojson) => {
-    const features = (geojson && geojson.features) || [];
-    if (!features.length) return;
+function hentJson(sti) {
+  return fetch(`${sti}?t=${Date.now()}`, { cache: "no-store" }).then((response) =>
+    response.ok ? response.json() : null
+  );
+}
 
-    const grupper = {};
-    features.forEach((feature) => {
-      const navn = (feature.properties && feature.properties._qgis_layer) || "Publicerede lag";
-      (grupper[navn] = grupper[navn] || []).push(feature);
-    });
+function rydLag() {
+  aktiveLag.forEach((laget) => {
+    layerControl.removeLayer(laget);
+    map.removeLayer(laget);
+  });
+  aktiveLag = [];
+}
 
-    const tilføjede = [];
-    Object.keys(grupper).sort().forEach((navn) => {
-      const laget = L.geoJSON(
-        { type: "FeatureCollection", features: grupper[navn] },
-        { pointToLayer: (feature, latlng) => L.circleMarker(latlng, { radius: 6 }) }
-      ).addTo(map);
-      layerControl.addOverlay(laget, `${navn} (${grupper[navn].length})`);
-      tilføjede.push(laget);
-    });
+function visProjekt(projektId) {
+  rydLag();
+  harZoometTilData = false;
+  if (!projektId) return Promise.resolve();
 
-    const bounds = L.featureGroup(tilføjede).getBounds();
-    if (bounds.isValid()) {
-      map.fitBounds(bounds, { padding: [30, 30] });
-      harZoometTilData = true;
-    }
-  })
-  .catch((err) => console.warn("Kunne ikke hente publicerede lag:", err));
+  aktueltProjekt = projektId;
+  localStorage.setItem(PROJECT_KEY, projektId);
+
+  return hentJson(`data/projects/${projektId}/layers.geojson`)
+    .then((geojson) => {
+      const features = (geojson && geojson.features) || [];
+      if (!features.length) return;
+
+      const grupper = {};
+      features.forEach((feature) => {
+        const navn = (feature.properties && feature.properties._qgis_layer) || "Publicerede lag";
+        (grupper[navn] = grupper[navn] || []).push(feature);
+      });
+
+      Object.keys(grupper)
+        .sort()
+        .forEach((navn) => {
+          const laget = L.geoJSON(
+            { type: "FeatureCollection", features: grupper[navn] },
+            { pointToLayer: (feature, latlng) => L.circleMarker(latlng, { radius: 6 }) }
+          ).addTo(map);
+          layerControl.addOverlay(laget, `${navn} (${grupper[navn].length})`);
+          aktiveLag.push(laget);
+        });
+
+      const bounds = L.featureGroup(aktiveLag).getBounds();
+      if (bounds.isValid()) {
+        map.fitBounds(bounds, { padding: [30, 30] });
+        harZoometTilData = true;
+      }
+    })
+    .catch((err) => console.warn("Kunne ikke hente lag for projektet:", err));
+}
+
+function indlæsProjekter() {
+  return hentJson("data/projects.json")
+    .then((index) => {
+      const projekter = (index && index.projects) || [];
+      projectSelect.innerHTML = "";
+
+      if (!projekter.length) {
+        projectSelect.innerHTML = '<option value="">Ingen projekter endnu</option>';
+        return;
+      }
+
+      projekter.forEach((projekt) => {
+        const option = document.createElement("option");
+        option.value = projekt.id;
+        option.textContent = projekt.name || projekt.id;
+        projectSelect.appendChild(option);
+      });
+
+      const valgt = projekter.some((projekt) => projekt.id === aktueltProjekt)
+        ? aktueltProjekt
+        : projekter[0].id;
+      projectSelect.value = valgt;
+      return visProjekt(valgt);
+    })
+    .catch((err) => console.warn("Kunne ikke hente projektlisten:", err));
+}
+
+projectSelect.addEventListener("change", () => visProjekt(projectSelect.value));
+indlæsProjekter();
 
 // --- Live position ---
 const gpsStatus = document.getElementById("gps-status");
@@ -184,7 +243,10 @@ function decodeBase64(str) {
 }
 
 async function addObservation(latlng, note) {
-  const path = "data/pending.geojson";
+  if (!aktueltProjekt) {
+    throw new Error("Vælg et projekt først.");
+  }
+  const path = `data/projects/${aktueltProjekt}/pending.geojson`;
   const branch = config.branch || "main";
   let sha = null;
   let existing = { type: "FeatureCollection", features: [] };
