@@ -1,10 +1,13 @@
 # Opsætning af webkortet
 
-## 1. GitHub-repo og Pages
-1. Opret et nyt repo på din GitHub-konto (hrosenskjold), fx `qgis-feltkort`.
-2. Upload indholdet af denne `web/`-mappe til roden af repoet.
-3. Gå til repoets **Settings → Pages**, vælg branch `main` og mappe `/ (root)`.
-4. Efter et par minutter er siden tilgængelig på `https://<bruger>.github.io/<repo>/`.
+## 1. GitHub-repo og Pages — ✅ allerede sat op
+- Repo: https://github.com/hrosenskjold/QGIS2WEB (public)
+- Webkort: https://hrosenskjold.github.io/QGIS2WEB/
+- Pages serveres fra branch `main`, mappe `/ (root)`.
+- `data/layers.geojson` findes som en tom FeatureCollection, indtil du publicerer lag fra QGIS.
+
+Skal indholdet af denne `web/`-mappe opdateres på siden igen senere, uploades filerne
+blot til roden af det repo.
 
 ## 2. Personal Access Token (til at gemme observationer og publicere lag)
 1. Gå til GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens.

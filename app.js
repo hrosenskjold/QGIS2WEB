@@ -1,10 +1,18 @@
 const CONFIG_KEY = "qgis2web_sync_config";
 
+const DEFAULT_CONFIG = {
+  owner: "hrosenskjold",
+  repo: "QGIS2WEB",
+  branch: "main",
+  token: "",
+  firebaseUrl: "",
+};
+
 function loadConfig() {
   try {
-    return JSON.parse(localStorage.getItem(CONFIG_KEY)) || {};
+    return { ...DEFAULT_CONFIG, ...(JSON.parse(localStorage.getItem(CONFIG_KEY)) || {}) };
   } catch (err) {
-    return {};
+    return { ...DEFAULT_CONFIG };
   }
 }
 
