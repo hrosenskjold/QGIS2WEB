@@ -1,6 +1,11 @@
 {
   "projects": [
     {
+      "id": "commit-batch-test",
+      "name": "Commit Batch Test",
+      "updated": "2026-09-22T06:01:32Z"
+    },
+    {
       "id": "test",
       "name": "test",
       "updated": "2026-09-22T05:57:54Z"
