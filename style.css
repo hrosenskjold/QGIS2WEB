@@ -143,3 +143,81 @@ html, body {
 .hidden {
   display: none !important;
 }
+
+#layer-panel {
+  position: absolute;
+  top: 58px;
+  right: 10px;
+  z-index: 1000;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.3);
+  padding: 8px 10px;
+  max-height: 55vh;
+  overflow-y: auto;
+  font-size: 0.85rem;
+  max-width: min(60vw, 320px);
+}
+
+#layer-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+#layer-panel-toggle {
+  border: none;
+  background: transparent;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+#layer-table th {
+  font-weight: normal;
+  font-size: 0.7rem;
+  color: #555;
+  padding: 2px 4px;
+}
+
+#layer-table td {
+  padding: 2px 4px;
+}
+
+#layer-table .lag-navn {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Labels skal stå frit på kortet uden Leaflets tooltip-boks og pil. */
+.leaflet-tooltip.qgis-label {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  pointer-events: none;
+}
+
+.leaflet-tooltip.qgis-label::before {
+  display: none;
+}
+
+.popup-tabel {
+  border-collapse: collapse;
+  max-height: 240px;
+}
+
+.popup-tabel td {
+  padding: 2px 8px 2px 0;
+  vertical-align: top;
+  font-size: 0.85rem;
+}
+
+.popup-tabel td:first-child {
+  color: #555;
+  white-space: nowrap;
+}

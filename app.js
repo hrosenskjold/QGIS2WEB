@@ -1,4 +1,7 @@
 const CONFIG_KEY = "qgis2web_sync_config";
+const PROJECT_KEY = "qgis2web_sync_project";
+const BASEMAP_KEY = "qgis2web_sync_basemap";
+const STANDARD_OBS_LAG = "Observationer";
 
 const DEFAULT_CONFIG = {
   owner: "hrosenskjold",
@@ -22,27 +25,46 @@ function saveConfig(newConfig) {
 
 let config = loadConfig();
 
-// --- Kort ---
+// --- Kort og baggrundskort ---
 const map = L.map("map").setView([56.0, 10.0], 6);
-L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-  maxZoom: 19,
-  attribution: "&copy; OpenStreetMap-bidragydere",
-}).addTo(map);
 
-const PROJECT_KEY = "qgis2web_sync_project";
+const baggrundskort = {
+  OpenStreetMap: L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: "&copy; OpenStreetMap-bidragydere",
+  }),
+  Topografisk: L.tileLayer("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png", {
+    maxZoom: 17,
+    attribution:
+      "Kortdata: &copy; OpenStreetMap-bidragydere, SRTM | Visning: &copy; OpenTopoMap (CC-BY-SA)",
+  }),
+  Luftfoto: L.tileLayer(
+    "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    { maxZoom: 19, attribution: "Luftfoto: &copy; Esri, Maxar, Earthstar Geographics" }
+  ),
+  "Lyst (Carto)": L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
+    maxZoom: 20,
+    attribution: "&copy; OpenStreetMap-bidragydere, &copy; CARTO",
+  }),
+  "Mørkt (Carto)": L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+    maxZoom: 20,
+    attribution: "&copy; OpenStreetMap-bidragydere, &copy; CARTO",
+  }),
+  "Intet baggrundskort": L.layerGroup(),
+};
 
-const STANDARD_OBS_LAG = "Observationer";
+const gemtBaggrund = localStorage.getItem(BASEMAP_KEY);
+(baggrundskort[gemtBaggrund] || baggrundskort.OpenStreetMap).addTo(map);
+L.control.layers(baggrundskort, null, { collapsed: true }).addTo(map);
+map.on("baselayerchange", (event) => localStorage.setItem(BASEMAP_KEY, event.name));
 
+// --- Tilstand ---
 let harZoometTilData = false;
-let aktiveLag = [];
 let aktueltProjekt = localStorage.getItem(PROJECT_KEY) || "";
 let projektListe = [];
+let panelLag = [];
 let obsLagPrNavn = {};
 let aktivtObsLag = STANDARD_OBS_LAG;
-
-const layerControl = L.control.layers(null, null, { collapsed: false }).addTo(map);
-const liveLayerGroup = L.layerGroup().addTo(map);
-layerControl.addOverlay(liveLayerGroup, "Min position");
 
 const projectSelect = document.getElementById("project-select");
 
@@ -53,22 +75,125 @@ function hentJson(sti) {
   );
 }
 
-function rydLag() {
-  aktiveLag.forEach((laget) => {
-    layerControl.removeLayer(laget);
-    map.removeLayer(laget);
+// --- Labels og popups ---
+// Alt tekstindhold sættes via textContent og style-egenskaber, aldrig via
+// innerHTML, så skrifttypenavne og attributværdier fra QGIS ikke kan injicere
+// markup i siden.
+function labelElement(label) {
+  const span = document.createElement("span");
+  span.textContent = label.text;
+  span.style.color = label.color;
+  span.style.fontSize = `${label.size}px`;
+  span.style.fontFamily = `${label.family}, sans-serif`;
+  span.style.fontWeight = label.bold ? "bold" : "normal";
+  span.style.fontStyle = label.italic ? "italic" : "normal";
+  if (label.haloColor) {
+    const radius = `${label.haloSize || 2}px`;
+    const skygge = `0 0 ${radius} ${label.haloColor}`;
+    span.style.textShadow = `${skygge}, ${skygge}, ${skygge}`;
+  }
+  return span;
+}
+
+function popupElement(props) {
+  const tabel = document.createElement("table");
+  tabel.className = "popup-tabel";
+  Object.keys(props)
+    .filter((navn) => !navn.startsWith("_qgis"))
+    .forEach((navn) => {
+      const række = tabel.insertRow();
+      række.insertCell().textContent = navn;
+      const værdi = props[navn];
+      række.insertCell().textContent =
+        værdi === null || værdi === undefined ? "" : String(værdi);
+    });
+  return tabel;
+}
+
+function sætLabels(post, til) {
+  post.labels = til;
+  post.lag.eachLayer((featureLag) => {
+    const label = ((featureLag.feature || {}).properties || {})._qgis_label;
+    if (!label) return;
+    if (til) {
+      featureLag.bindTooltip(labelElement(label), {
+        permanent: true,
+        direction: "center",
+        className: "qgis-label",
+      });
+    } else {
+      featureLag.unbindTooltip();
+    }
   });
-  aktiveLag = [];
 }
 
-function escapeHtml(tekst) {
-  return String(tekst).replace(
-    /[&<>"']/g,
-    (tegn) =>
-      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[tegn])
-  );
+function sætPopups(post, til) {
+  post.popup = til;
+  post.lag.eachLayer((featureLag) => {
+    const props = (featureLag.feature || {}).properties || {};
+    if (til) {
+      featureLag.bindPopup(popupElement(props));
+    } else {
+      featureLag.unbindPopup();
+    }
+  });
 }
 
+// --- Lagpanel ---
+function afkrydsningsCelle(afkrydset, deaktiveret, onChange) {
+  const celle = document.createElement("td");
+  const boks = document.createElement("input");
+  boks.type = "checkbox";
+  boks.checked = afkrydset;
+  boks.disabled = deaktiveret;
+  boks.addEventListener("change", () => onChange(boks.checked));
+  celle.appendChild(boks);
+  return celle;
+}
+
+function tegnLagpanel() {
+  const krop = document.querySelector("#layer-table tbody");
+  krop.innerHTML = "";
+
+  panelLag.forEach((post) => {
+    const række = document.createElement("tr");
+    const navnCelle = document.createElement("td");
+    navnCelle.textContent = post.navn;
+    navnCelle.className = "lag-navn";
+    række.appendChild(navnCelle);
+
+    række.appendChild(
+      afkrydsningsCelle(post.synlig, false, (til) => {
+        post.synlig = til;
+        if (til) map.addLayer(post.lag);
+        else map.removeLayer(post.lag);
+      })
+    );
+    række.appendChild(
+      afkrydsningsCelle(post.labels, !post.harLabels, (til) => sætLabels(post, til))
+    );
+    række.appendChild(
+      afkrydsningsCelle(post.popup, post.popupLåst, (til) => sætPopups(post, til))
+    );
+
+    krop.appendChild(række);
+  });
+}
+
+function registrerLag(post) {
+  panelLag.push(post);
+  tegnLagpanel();
+}
+
+function rydLag() {
+  panelLag
+    .filter((post) => !post.erObservation && !post.fast)
+    .forEach((post) => map.removeLayer(post.lag));
+  panelLag = panelLag.filter((post) => post.erObservation || post.fast);
+  tegnLagpanel();
+}
+
+// --- Observationer ---
 function obsLagFor(navn) {
   if (!obsLagPrNavn[navn]) {
     const laget = L.geoJSON(null, {
@@ -83,10 +208,18 @@ function obsLagFor(navn) {
       onEachFeature: (feature, featureLag) => {
         const props = feature.properties || {};
         const indhold = document.createElement("div");
-        indhold.innerHTML =
-          `<strong>${escapeHtml(props._obs_layer || STANDARD_OBS_LAG)}</strong><br>` +
-          `${escapeHtml(props.note || "")}<br>` +
-          `<small>${escapeHtml(props.timestamp || "")}</small><br>`;
+
+        const overskrift = document.createElement("strong");
+        overskrift.textContent = props._obs_layer || STANDARD_OBS_LAG;
+        indhold.appendChild(overskrift);
+
+        const note = document.createElement("div");
+        note.textContent = props.note || "";
+        indhold.appendChild(note);
+
+        const tid = document.createElement("small");
+        tid.textContent = props.timestamp || "";
+        indhold.appendChild(tid);
 
         const sletKnap = document.createElement("button");
         sletKnap.textContent = "Slet observation";
@@ -104,21 +237,31 @@ function obsLagFor(navn) {
           }
         });
         indhold.appendChild(sletKnap);
+
         featureLag.bindPopup(indhold);
       },
     }).addTo(map);
+
     obsLagPrNavn[navn] = laget;
-    layerControl.addOverlay(laget, `${navn} (observationer)`);
+    registrerLag({
+      navn: `${navn} (observationer)`,
+      lag: laget,
+      synlig: true,
+      labels: false,
+      popup: true,
+      harLabels: false,
+      popupLåst: true,
+      erObservation: true,
+    });
   }
   return obsLagPrNavn[navn];
 }
 
 function rydObservationer() {
-  Object.keys(obsLagPrNavn).forEach((navn) => {
-    layerControl.removeLayer(obsLagPrNavn[navn]);
-    map.removeLayer(obsLagPrNavn[navn]);
-  });
+  Object.keys(obsLagPrNavn).forEach((navn) => map.removeLayer(obsLagPrNavn[navn]));
   obsLagPrNavn = {};
+  panelLag = panelLag.filter((post) => !post.erObservation);
+  tegnLagpanel();
 }
 
 function visObservationer(projektId) {
@@ -132,6 +275,7 @@ function visObservationer(projektId) {
     .catch((err) => console.warn("Kunne ikke hente observationer:", err));
 }
 
+// --- Projekter ---
 function visProjekt(projektId) {
   rydLag();
   rydObservationer();
@@ -158,6 +302,7 @@ function visProjekt(projektId) {
         (grupper[navn] = grupper[navn] || []).push(feature);
       });
 
+      const tilføjede = [];
       Object.keys(grupper)
         .sort()
         .forEach((navn) => {
@@ -173,11 +318,28 @@ function visProjekt(projektId) {
                 ),
             }
           ).addTo(map);
-          layerControl.addOverlay(laget, `${navn} (${grupper[navn].length})`);
-          aktiveLag.push(laget);
+
+          const harLabels = grupper[navn].some(
+            (feature) => feature.properties && feature.properties._qgis_label
+          );
+          const post = {
+            navn: `${navn} (${grupper[navn].length})`,
+            lag: laget,
+            synlig: true,
+            labels: harLabels,
+            popup: true,
+            harLabels,
+            popupLåst: false,
+            erObservation: false,
+          };
+          registrerLag(post);
+          // Labels følger QGIS: er de slået til der, vises de også her.
+          if (harLabels) sætLabels(post, true);
+          sætPopups(post, true);
+          tilføjede.push(laget);
         });
 
-      const bounds = L.featureGroup(aktiveLag).getBounds();
+      const bounds = L.featureGroup(tilføjede).getBounds();
       if (bounds.isValid()) {
         map.fitBounds(bounds, { padding: [30, 30] });
         harZoometTilData = true;
@@ -215,11 +377,31 @@ function indlæsProjekter() {
 }
 
 projectSelect.addEventListener("change", () => visProjekt(projectSelect.value));
+
+document.getElementById("layer-panel-toggle").addEventListener("click", () => {
+  const tabel = document.getElementById("layer-table");
+  const skjult = tabel.classList.toggle("hidden");
+  document.getElementById("layer-panel-toggle").textContent = skjult ? "+" : "−";
+});
+
 indlæsProjekter();
 
 // --- Live position ---
 const gpsStatus = document.getElementById("gps-status");
+const liveLayerGroup = L.layerGroup().addTo(map);
 let liveMarker = null;
+
+registrerLag({
+  navn: "Min position",
+  lag: liveLayerGroup,
+  synlig: true,
+  labels: false,
+  popup: false,
+  harLabels: false,
+  popupLåst: true,
+  erObservation: false,
+  fast: true,
+});
 
 function updateFirebasePosition(lat, lon) {
   if (!config.firebaseUrl) return;
@@ -310,6 +492,7 @@ document.getElementById("observation-save").addEventListener("click", async () =
   }
 });
 
+// --- GitHub ---
 async function githubApi(path, options = {}) {
   const { owner, repo, token } = config;
   if (!owner || !repo || !token) {
@@ -460,12 +643,6 @@ document.getElementById("settings-toggle").addEventListener("click", () => {
   settingsPanel.classList.toggle("hidden");
 });
 
-document.getElementById("cfg-owner").value = config.owner || "";
-document.getElementById("cfg-repo").value = config.repo || "";
-document.getElementById("cfg-branch").value = config.branch || "main";
-document.getElementById("cfg-token").value = config.token || "";
-document.getElementById("cfg-firebase").value = config.firebaseUrl || "";
-
 function opdaterObsLagFelt() {
   const felt = document.getElementById("cfg-obslayer");
   if (felt) felt.value = aktivtObsLag;
@@ -489,6 +666,12 @@ document.getElementById("obslayer-new").addEventListener("click", async () => {
     alert(`Kunne ikke oprette observationslag: ${err.message}`);
   }
 });
+
+document.getElementById("cfg-owner").value = config.owner || "";
+document.getElementById("cfg-repo").value = config.repo || "";
+document.getElementById("cfg-branch").value = config.branch || "main";
+document.getElementById("cfg-token").value = config.token || "";
+document.getElementById("cfg-firebase").value = config.firebaseUrl || "";
 
 document.getElementById("cfg-save").addEventListener("click", () => {
   config = {
