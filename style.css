@@ -1,7 +1,17 @@
-html, body {
+:root {
+  /* Sættes af app.js ud fra topbjælkens faktiske højde. */
+  --topbjaelke: 52px;
+}
+
+html,
+body {
   margin: 0;
   height: 100%;
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* Kortet fylder hele skærmen; uden dette kan en lang tekst i topbjælken
+     gøre dokumentet bredere end viewporten, så alt ankret til højre
+     (lagpanel, knapper) skubbes uden for skærmen. */
+  overflow: hidden;
 }
 
 #map {
@@ -9,19 +19,20 @@ html, body {
   inset: 0;
 }
 
+/* --- Topbjælke --- */
 #toolbar {
   position: absolute;
-  top: 12px;
-  left: 12px;
+  top: 0;
+  left: 0;
+  right: 0;
   z-index: 1000;
   background: white;
   padding: 8px 12px;
-  border-radius: 8px;
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.25);
   display: flex;
   align-items: center;
   gap: 10px;
-  max-width: calc(100vw - 24px);
+  flex-wrap: wrap;
 }
 
 #toolbar button {
@@ -32,11 +43,6 @@ html, body {
   background: #1a73e8;
   color: white;
   cursor: pointer;
-}
-
-#gps-status {
-  font-size: 0.8rem;
-  color: #333;
   white-space: nowrap;
 }
 
@@ -49,9 +55,51 @@ html, body {
   max-width: 45vw;
 }
 
+#gps-status {
+  font-size: 0.8rem;
+  color: #333;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Kortkontrollerne skal ligge under bjælken, ikke bag den. */
+.leaflet-top {
+  margin-top: calc(var(--topbjaelke) + 8px);
+}
+
+/* --- Flydende knapper --- */
+#locate-btn,
+#settings-toggle {
+  position: absolute;
+  right: 12px;
+  z-index: 1000;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: none;
+  background: white;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+  line-height: 1;
+}
+
+#locate-btn {
+  bottom: 74px;
+  font-size: 1.6rem;
+  color: #1a73e8;
+}
+
+#settings-toggle {
+  bottom: 16px;
+  font-size: 1.3rem;
+}
+
+/* --- Paneler --- */
 .panel {
   position: absolute;
-  top: 70px;
+  top: calc(var(--topbjaelke) + 10px);
   left: 12px;
   z-index: 1000;
   background: white;
@@ -76,8 +124,9 @@ html, body {
 #observation-form textarea {
   width: 100%;
   box-sizing: border-box;
-  padding: 6px;
+  padding: 8px;
   margin-top: 2px;
+  font-size: 1rem;
 }
 
 #observation-form textarea {
@@ -92,11 +141,13 @@ html, body {
 }
 
 .form-actions button,
-#cfg-save {
-  padding: 8px 14px;
+#cfg-save,
+#obslayer-new {
+  padding: 10px 14px;
   border: none;
   border-radius: 6px;
   cursor: pointer;
+  font-size: 0.95rem;
 }
 
 #cfg-save,
@@ -112,7 +163,7 @@ html, body {
 
 .slet-knap {
   margin-top: 8px;
-  padding: 6px 12px;
+  padding: 8px 12px;
   border: none;
   border-radius: 6px;
   background: #b00020;
@@ -125,35 +176,18 @@ html, body {
   cursor: default;
 }
 
-#settings-toggle {
-  position: absolute;
-  bottom: 12px;
-  right: 12px;
-  z-index: 1000;
-  width: 42px;
-  height: 42px;
-  border-radius: 50%;
-  border: none;
-  background: white;
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.3);
-  font-size: 1.2rem;
-  cursor: pointer;
-}
-
-.hidden {
-  display: none !important;
-}
-
+/* --- Lagpanel --- */
 #layer-panel {
   position: absolute;
-  top: 58px;
+  /* Skal rydde baggrundskort-kontrollen, der ligger øverst til højre. */
+  top: calc(var(--topbjaelke) + 62px);
   right: 10px;
   z-index: 1000;
   background: white;
   border-radius: 8px;
   box-shadow: 0 1px 6px rgba(0, 0, 0, 0.3);
   padding: 8px 10px;
-  max-height: 55vh;
+  max-height: 50vh;
   overflow-y: auto;
   font-size: 0.85rem;
   max-width: min(60vw, 320px);
@@ -169,10 +203,10 @@ html, body {
 #layer-panel-toggle {
   border: none;
   background: transparent;
-  font-size: 1.1rem;
+  font-size: 1.2rem;
   line-height: 1;
   cursor: pointer;
-  padding: 0 4px;
+  padding: 0 6px;
 }
 
 #layer-table th {
@@ -183,16 +217,22 @@ html, body {
 }
 
 #layer-table td {
-  padding: 2px 4px;
+  padding: 3px 4px;
+}
+
+#layer-table input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
 }
 
 #layer-table .lag-navn {
-  max-width: 160px;
+  max-width: 150px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+/* --- Labels og popups --- */
 /* Labels skal stå frit på kortet uden Leaflets tooltip-boks og pil. */
 .leaflet-tooltip.qgis-label {
   background: transparent;
@@ -208,7 +248,6 @@ html, body {
 
 .popup-tabel {
   border-collapse: collapse;
-  max-height: 240px;
 }
 
 .popup-tabel td {
@@ -220,4 +259,50 @@ html, body {
 .popup-tabel td:first-child {
   color: #555;
   white-space: nowrap;
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* --- Mobil --- */
+@media (max-width: 600px) {
+  #toolbar {
+    padding: 6px 8px;
+    gap: 6px;
+  }
+
+  #toolbar button {
+    padding: 10px 12px;
+    font-size: 0.95rem;
+  }
+
+  #project-select {
+    max-width: 44vw;
+    font-size: 0.95rem;
+  }
+
+  /* GPS-status får sin egen linje i stedet for at presse knapperne. */
+  #gps-status {
+    flex-basis: 100%;
+    font-size: 0.72rem;
+  }
+
+  .panel {
+    left: 8px;
+    right: 8px;
+    width: auto;
+  }
+
+  #layer-panel {
+    right: 8px;
+    max-width: 80vw;
+    max-height: 40vh;
+    font-size: 0.8rem;
+  }
+
+  .leaflet-popup-content {
+    max-height: 40vh;
+    overflow-y: auto;
+  }
 }

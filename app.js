@@ -50,6 +50,20 @@ const gemtBaggrund = localStorage.getItem(BASEMAP_KEY);
 L.control.layers(baggrundskort, null, { collapsed: true }).addTo(map);
 map.on("baselayerchange", (event) => localStorage.setItem(BASEMAP_KEY, event.name));
 
+// Giver plads til de flydende knapper nederst til højre.
+map.attributionControl.setPosition("bottomleft");
+
+// Paneler og kortkontroller placeres efter topbjælkens faktiske højde, som
+// ændrer sig når den ombrydes på smalle skærme.
+function opdaterTopbjælkeHøjde() {
+  const højde = document.getElementById("toolbar").offsetHeight;
+  document.documentElement.style.setProperty("--topbjaelke", `${højde}px`);
+}
+
+window.addEventListener("resize", opdaterTopbjælkeHøjde);
+window.addEventListener("orientationchange", opdaterTopbjælkeHøjde);
+opdaterTopbjælkeHøjde();
+
 // --- Tilstand ---
 let harZoometTilData = false;
 let aktueltProjekt = localStorage.getItem(PROJECT_KEY) || "";
@@ -382,6 +396,7 @@ indlæsProjekter();
 const gpsStatus = document.getElementById("gps-status");
 const liveLayerGroup = L.layerGroup().addTo(map);
 let liveMarker = null;
+let sidstePosition = null;
 
 registrerLag({
   navn: "Min position",
@@ -407,6 +422,7 @@ function updateFirebasePosition(lat, lon) {
 
 function onPosition(position) {
   const { latitude, longitude } = position.coords;
+  sidstePosition = [latitude, longitude];
   gpsStatus.textContent = `GPS: ${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
 
   if (!liveMarker) {
@@ -440,6 +456,30 @@ if ("geolocation" in navigator) {
   gpsStatus.textContent = "GPS ikke understøttet af browseren.";
 }
 
+document.getElementById("locate-btn").addEventListener("click", () => {
+  if (sidstePosition) {
+    map.setView(sidstePosition, Math.max(map.getZoom(), 17));
+    return;
+  }
+  if (!("geolocation" in navigator)) {
+    alert("GPS er ikke understøttet af denne browser.");
+    return;
+  }
+  // Der er endnu ikke kommet et fix fra watchPosition – bed om ét med det samme.
+  gpsStatus.textContent = "GPS: finder position…";
+  navigator.geolocation.getCurrentPosition(
+    (position) => {
+      onPosition(position);
+      map.setView([position.coords.latitude, position.coords.longitude], 17);
+    },
+    (err) => {
+      onPositionError(err);
+      alert(`Kunne ikke finde din position: ${err.message}`);
+    },
+    { enableHighAccuracy: true, timeout: 15000 }
+  );
+});
+
 // --- Tilføj observation ---
 const addBtn = document.getElementById("add-observation-btn");
 const form = document.getElementById("observation-form");
@@ -456,7 +496,7 @@ map.on("click", (event) => {
   if (!placingObservation) return;
   pendingLatLng = event.latlng;
   placingObservation = false;
-  addBtn.textContent = "Tilføj observation her";
+  addBtn.textContent = "+ Observation";
   form.classList.remove("hidden");
   noteInput.value = "";
   noteInput.focus();
