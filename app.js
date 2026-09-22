@@ -42,14 +42,6 @@ const baggrundskort = {
     "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
     { maxZoom: 19, attribution: "Luftfoto: &copy; Esri, Maxar, Earthstar Geographics" }
   ),
-  "Lyst (Carto)": L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
-    maxZoom: 20,
-    attribution: "&copy; OpenStreetMap-bidragydere, &copy; CARTO",
-  }),
-  "Mørkt (Carto)": L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
-    maxZoom: 20,
-    attribution: "&copy; OpenStreetMap-bidragydere, &copy; CARTO",
-  }),
   "Intet baggrundskort": L.layerGroup(),
 };
 
