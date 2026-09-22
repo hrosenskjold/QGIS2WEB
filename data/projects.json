@@ -1,11 +1,6 @@
 {
   "projects": [
     {
-      "id": "bindtest",
-      "name": "BindTest",
-      "updated": "2026-09-22T05:54:42Z"
-    },
-    {
       "id": "test",
       "name": "test",
       "updated": "2026-09-22T05:40:15Z"
